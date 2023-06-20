@@ -307,8 +307,7 @@ def load_results_file(fname):
 
 if __name__ == "__main__":
     main_folder = (
-        '/mnt/samba/Actual/Medical_project/Measurements_Exp_1/'
-        'Exp_1_HRV_calculations_anonimized_accelerometer_data/'
+        '/data/anonimized_accelerometer_data/'
     )
 
     # Plot accelerometer data

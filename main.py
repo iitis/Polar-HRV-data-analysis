@@ -225,12 +225,10 @@ def experiment_1_calculate_HRV(parameters):
 
 if __name__ == "__main__":
     main_folder = (
-        '/mnt/samba/Actual/Medical_project/Measurements_Exp_1/'
-        'Exp_1_HRV_calculations_anonimized_raw_data/'
+        '/data/anonimized_raw_data/'
     )
     accelerometer_folder = (
-        '/mnt/samba/Actual/Medical_project/Measurements_Exp_1/'
-        'Exp_1_HRV_calculations_anonimized_accelerometer_data/'
+        '/data/anonimized_accelerometer_data/'
     )
     PANSS_localization = f'{main_folder}../'
     HRV_method = 'RMSSD'
