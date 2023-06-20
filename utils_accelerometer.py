@@ -482,12 +482,10 @@ if __name__ == "__main__":
     os.makedirs(saving_folder, exist_ok=True)
 
     accelerometer_folder = (
-        '/mnt/samba/Actual/Medical_project/Measurements_Exp_1/'
-        'Exp_1_HRV_calculations_anonimized_accelerometer_data/'
+        '/data/anonimized_accelerometer_data/'
     )
     RR_folder = (
-        '/mnt/samba/Actual/Medical_project/Measurements_Exp_1/'
-        'Exp_1_HRV_calculations_anonimized_raw_data/'
+        '/data/anonimized_raw_data/'
     )
 
     file_for_saving_results = 'results.csv'
