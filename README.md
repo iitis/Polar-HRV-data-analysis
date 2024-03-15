@@ -1,4 +1,4 @@
-## Polar HRV Data Analysis Library (PDAL) v 1.0
+## Polar HRV Data Analysis Library (PDAL) v 1.1
 Library for HRV and accelerometer data analysis based on measurements from Polar H10 wearable devices.
 
 It is a source code related to the paper:
@@ -27,7 +27,7 @@ Medical University of Silesia, Tarnowskie Góry, Poland;
 Tarnowskie Góry, Poland.  
 
 ## LICENSE:
-Copyright 2023
+Copyright 2023-2024
 Institute of Theoretical and Applied Informatics,
 Polish Academy of Sciences (ITAI PAS) https://www.iitis.pl
 
@@ -50,7 +50,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## FUNCTIONALITY:
 - Loading RR intervals and accelerometer data from Polar H10 wearable devices collected through [Polar Sensor Logger](https://play.google.com/store/apps/details?id=com.j_ware.polarsensorlogger&hl=pl&gl=US) application.
 - Preparation of data preprocessing: identification and removal of anomalous measurements, data interpolation.
-- Calculation of HRV values using the RMSSD (Root Mean Square of the Successive Differences) approach in sliding windows.
+- Calculation of HRV values using the RMSSD (Root Mean Square of the Successive Differences), SDNN (Standard Deviation of N-N intervals) or pNN50 (number of pairs of adjacent R-R intervals with a difference greater than 50 ms) approaches in sliding windows.
 - Calculation of mobility coefficient based on accelerometer data.
 - Data postprocessing: plots of results, distributions, the calculation of correlation coefficients, etc.
 
@@ -63,7 +63,7 @@ The recommended path for data samples is `data` folder.
 
 ## RULES AND USAGE:
 
-- Main HRV calculations are performed in the `main.py` file. Data is loaded, preprocessed, and HRV metrics are calculated in this file. Furthermore, the summary plots and calculation coefficients / statistical tests are performed.
+- Main HRV calculations are performed in the `main.py` file. Data is loaded, preprocessed, and HRV metrics are calculated in this file. Furthermore, the summary plots and calculation coefficients / statistical tests are performed. It is possible to choose one of the available HRV metrics, i.e. RMSSD, SDNN or pNN50, by setting `HRV_method` to `RMSSD`, `SDNN` or `pNN50`.
 To reproduce detailed results for the window size of 15 minutes and the time interval between consecutive windows set as 1 minute, set `exclude_quetiapine = False` and `sensitivity_analysis = False` and run the file.
 To reproduce sensitivity analysis for different window sizes and values of the time interval between consecutive time windows, set `exclude_quetiapine = False` and `sensitivity_analysis = True` and run the file. Then, to prepare the heatmaps of correlation, run the `utils_advanced_plots.py` file with the proper parameters according to the selected mode.
 To reproduce results without the patients taking quetiapine, set `exclude_quetiapine = True` and `sensitivity_analysis = False`.

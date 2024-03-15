@@ -1,5 +1,5 @@
 """
-Copyright 2023
+Copyright 2023-2024
 Institute of Theoretical and Applied Informatics,
 Polish Academy of Sciences (ITAI PAS) https://www.iitis.pl
 
@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ---
-Polar HRV Data Analysis Library (PDAL) v 1.0
+Polar HRV Data Analysis Library (PDAL) v 1.1
 ---
 
 A source code to the paper:
@@ -58,6 +58,7 @@ from utils_loading import (
     load_data_for_single_person,
     load_and_preprocess_data_for_single_person,
 )
+from utils_basic_plots import display_p_values
 from HRV_calculation import (
     calculate_HRV_in_windows,
     prepare_windows_any_frequency_any_step
@@ -220,7 +221,9 @@ def process_accelerometer_data(subseries_ACC_data):
     return timestamps_ACC_numpy, results_for_ACC
 
 
-def process_RR_data_corresponding_to_ACC(data_RR, timestamps_ACC):
+def process_RR_data_corresponding_to_ACC(data_RR,
+                                         timestamps_ACC,
+                                         HRV_method):
     """
     Calculate HRV values based on RR intervals and change
     timestamps to the ones that will correspond to timestamps
@@ -230,6 +233,13 @@ def process_RR_data_corresponding_to_ACC(data_RR, timestamps_ACC):
     ----------
       *data_RR* - (Pandas DataFrame) contains raw RR interval data
       *timestamps_ACC* - (Numpy array) contains values of numpy.datetime64
+      *HRV_method* - (str) method of HRV calculation;
+                  possible options:
+                  - RMSSD - root mean square of successive differences
+                  - SDNN - standard deviation of RR intervals without
+                           anomalies
+                  - pNN50 - number of RR intervals differing by more than
+                            50ms divided by the total number of RR intervals
 
     Returns:
     --------
@@ -241,7 +251,7 @@ def process_RR_data_corresponding_to_ACC(data_RR, timestamps_ACC):
         data_RR,
         parameters['step_frequency'],
         parameters['window_size'],
-        'RMSSD')
+        HRV_method)
 
     # Replace timestamps related to RR data by timestamps from ACC data
     # which are nearest to selected RR measurements
@@ -349,35 +359,35 @@ def plot_accelerometer_vs_HRV_data(HRV_dataframe,
     mean_HRV = HRV_dataframe['HRV'].mean()
     # Plot of two curves
     sns.set_style('whitegrid')
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(6, 4))
     ax_2 = ax.twinx()
     ax.plot(HRV_dataframe.index.values,
             HRV_dataframe.values,
             color='red',
             label='HRV')
-    ax.set_ylabel('HRV', color='red')
-    ax.tick_params(axis='y', colors='red')
+    ax.set_ylabel('HRV', color='red', fontsize=11)
+    ax.tick_params(axis='y', colors='red', labelsize=11)
     ax.grid(color='red', alpha=0.2)
 
     ax_2.plot(ACC_dataframe.index.values,
               ACC_dataframe.values,
               color='blue',
               label='accelerometer')
-    ax_2.set_ylabel('mobility [mg]', color='blue')
-    ax_2.tick_params(axis='y', colors='blue')
+    ax_2.set_ylabel('mobility [mg]', color='blue', fontsize=11)
+    ax_2.tick_params(axis='y', colors='blue', labelsize=11)
     ax_2.grid(color='blue', alpha=0.2)
     ax.set_xlabel('Timestamp')
     myFmt = DateFormatter("%H:%M")
     ax.xaxis.set_major_formatter(myFmt)
-    ax.tick_params(axis='x', labelrotation=90)
+    ax.tick_params(axis='x', labelrotation=90, labelsize=11)
     statistics, p_value = pearsonr(
         HRV_dataframe.values.flatten(),
         ACC_dataframe.values.flatten()
     )
-
-    plt.title('HRV vs mobility: '
-              f'Pearson r: {statistics:.2f}, p-value: {p_value:.2f}; '
-              f'mean HRV: {mean_HRV:.2f}')
+    presented_p_value = display_p_values(p_value)
+    plt.title("HRV vs mobility: "
+              f"Pearson\'s r: {statistics:.2f}, {presented_p_value}; "
+              f"mean HRV: {mean_HRV:.2f}")
     plt.tight_layout()
     plt.savefig(f'{saving_folder}{group}_{number}.pdf', dpi=400)
     plt.close()
@@ -402,7 +412,7 @@ def plot_correlation_HRV_and_mobility_vs_HRV(saving_folder):
         f'{saving_folder}results.csv', delimiter=';')
     palette = ['red', 'blue']
     sns.set_style("whitegrid")
-    fig, ax = plt.subplots(figsize=(5.5, 4))
+    fig, ax = plt.subplots(figsize=(5, 3.5))
     sns.scatterplot(
         data=correlation_data,
         x="Pearson_r",
@@ -449,8 +459,11 @@ def main_accelerometer_processing(parameters,
     )
     timestamps_ACC, results_for_ACC = process_accelerometer_data(
         subseries_ACC)
-    HRV_dataframe = process_RR_data_corresponding_to_ACC(data_RR,
-                                                         timestamps_ACC)
+    HRV_dataframe = process_RR_data_corresponding_to_ACC(
+        data_RR,
+        timestamps_ACC,
+        parameters['HRV_calculation_method']
+    )
     ACC_dataframe = pd.DataFrame(
         results_for_ACC,
         index=timestamps_ACC,
@@ -465,10 +478,12 @@ def main_accelerometer_processing(parameters,
         )
     # Save calculated data
     HRV_dataframe.to_pickle(
-        f'{saving_folder}{group}_{number}_HRV.pkl'
+        f'{saving_folder}{group}_{number}_'
+        f'{parameters["HRV_calculation_method"]}_HRV.pkl'
     )
     ACC_dataframe.to_pickle(
-        f'{saving_folder}{group}_{number}_accelerometer.pkl'
+        f'{saving_folder}{group}_{number}_'
+        f'{parameters["HRV_calculation_method"]}_accelerometer.pkl'
     )
     plot_accelerometer_vs_HRV_data(HRV_dataframe,
                                    ACC_dataframe,
@@ -478,7 +493,7 @@ def main_accelerometer_processing(parameters,
 
 
 if __name__ == "__main__":
-    saving_folder = '../Correlations_corrected/'
+    saving_folder = '../article_review/'
     os.makedirs(saving_folder, exist_ok=True)
 
     accelerometer_folder = (
@@ -496,6 +511,7 @@ if __name__ == "__main__":
     time_threshold_before_finish = '45 seconds'
     step_frequency = pd.Timedelta('1s')
     window_size = pd.Timedelta('5 min')
+    HRV_calculation_method = 'RMSSD'
 
     # Path to the RR-interval data should be in the 'main_folder'
     # key while path to the accelerometer data is located at
@@ -513,6 +529,7 @@ if __name__ == "__main__":
         'step_frequency': step_frequency,
         'window_size': window_size,
         'interpolation': False,
+        'HRV_calculation_method': HRV_calculation_method,
     }
 
     save_parameters(parameters)

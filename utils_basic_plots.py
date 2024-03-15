@@ -1,5 +1,5 @@
 """
-Copyright 2023
+Copyright 2023-2024
 Institute of Theoretical and Applied Informatics,
 Polish Academy of Sciences (ITAI PAS) https://www.iitis.pl
 
@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ---
-Polar HRV Data Analysis Library (PDAL) v 1.0
+Polar HRV Data Analysis Library (PDAL) v 1.1
 ---
 
 A source code to the paper:
@@ -58,7 +58,10 @@ import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
 from matplotlib.dates import DateFormatter, MinuteLocator
 
-from utils_others import append_row_to_file
+from utils_others import (
+    append_row_to_file,
+    compare_means_and_variances_in_groups
+)
 
 
 def prepare_labels(name):
@@ -118,6 +121,29 @@ def change_plot_range(ranges):
         plt.xlim(left=ranges['left'])
     if 'right' in ranges and ranges['right'] is not None:
         plt.xlim(right=ranges['right'])
+
+
+def display_p_values(p_value):
+    """
+    Prepares a string with properly formatted p-value.
+
+    Argument:
+    ---------
+       *p_value* (float) represents p-value
+
+    Returns:
+    --------
+       String for displaying obtained p-value in plots.
+    """
+    if p_value > 0.02:
+        present_p_value = f"$P={p_value:.2f}$"
+    elif p_value >= 0.002 and p_value <= 0.02:
+        present_p_value = f"$P={p_value:.3f}$"
+    elif p_value >= 0.001 and p_value < 0.002:
+        present_p_value = f"$P={p_value:.4f}$"
+    elif p_value < 0.001:
+        present_p_value = "$P<0.001$"
+    return present_p_value
 
 
 def plot_anomalies(ax,
@@ -260,7 +286,8 @@ def plot_column_of_values_for_given_person(dataframe,
 def regression_PANSS(dataframe,
                      HRV_columnname,
                      parameters,
-                     quetiapine_patients=None):
+                     quetiapine_patients=None,
+                     alternative='two-sided'):
     """
     Create regression plot for PANSS scores.
 
@@ -274,14 +301,18 @@ def regression_PANSS(dataframe,
       *parameters*: (dictionary) contains following keys:
         -step_frequency- (pd.Timedelta) step between consecutive windows
         -window_size- (pd.Timedelta) range of time windows
-        -result_saving_folder- (string) folder for saving correlation results
         -plot_saving_folder- (string) folder for saving correlation plots
       *quetiapine_patients*: (optional) Pandas Dataframe containing data from
                              people taking quetiapine; they are not taken into
                              account during the calculation of correlation
                              coefficient but they are additionally displayed
                              in the final plot
+      *alternative*: (string) defines an alternative hypothesis for
+                      statistical significance of Pearson's r values.
+                      Options: 'two-sided' (default), 'less' (negative
+                      correlation), 'greater' (positive correlation)
     """
+    assert alternative in ['two-sided', 'less', 'greater']
     columns = ['PANSS_P', 'PANSS_N', 'PANSS_G', 'PANSS_total']
     labels = ['PANSS positive scale',
               'PANSS negative scale',
@@ -290,12 +321,13 @@ def regression_PANSS(dataframe,
     for column, label in zip(columns, labels):
         correlation_result = pearsonr(
             x=dataframe[HRV_columnname],
-            y=dataframe[column]
+            y=dataframe[column],
+            alternative=alternative
         )
         statistic, pvalue = correlation_result[0], correlation_result[1]
         confidence_interval = correlation_result.confidence_interval()
         # Save results to the file
-        path = f"{parameters['result_saving_folder']}/results.csv"
+        path = f"{parameters['plot_saving_folder']}/results.csv"
         if not os.path.exists(path):
             append_row_to_file(
                 path,
@@ -323,41 +355,63 @@ def regression_PANSS(dataframe,
             plt.legend([plot_objects[0], plot_objects[3]],
                        ['w/o quetiapine', 'with quetiapine'])
         plt.ylabel(label)
-        plt.title(f'A relationship between HRV and {label}\n'
-                  f'Pearson r: {statistic:.3f}, p-value: {pvalue:.4f}, 95% CI: '
+        presented_p_value = display_p_values(pvalue)
+        plt.title(f'The relationship between HRV and {label}\n'
+                  f'Pearson\'s r: {statistic:.3f}, {presented_p_value}, 95% CI: '
                   f'[{confidence_interval[0]:.3f}, {confidence_interval[1]:.3f}]')
         plt.savefig(f"{parameters['plot_saving_folder']}/HRV_{column}.pdf",
                     dpi=300)
         plt.close()
 
 
-def boxplot_HRV(dataframe,
-                saving_folder,
-                x_axis_variable='HRV_RMSSD',
-                y_axis_variable='group'):
+def boxplot(dataframe,
+            saving_folder,
+            statistics,
+            mode='HRV',
+            x_axis_variable='HRV_RMSSD',
+            y_axis_variable='group'):
     """
-    Create boxplot which compares distributions from
-    different categories.
+    Create boxplot which compares HRV / mobility distributions
+    from different categories.
 
     Arguments:
     ----------
       *dataframe*: Pandas dataframe with full results
       *saving_folder*: (string) name of the folder for plots
+      *statistics*: (dict) contains results of the U test at fields
+                    'u_test_statistic', 'u_test_p_value'
+      *mode*: (string) HRV or ACC, depending on the considered case
       *x_axis_variable*: variable from 'dataframe' for x-axis
       *y_axis_variable*: variable from 'dataframe' for y-axis
     """
-    colors = ['cornflowerblue', 'indianred']
-    sns.set_palette(sns.color_palette(colors))
+    test_statistics = statistics["u_test_statistic"]
+    p_value = statistics["u_test_p_value"]
+    presented_p_value = display_p_values(p_value)
+    colors = {'control': 'cornflowerblue',
+              'treatment': 'indianred'}
     fig, ax = plt.subplots(figsize=(6, 2))
     sns.boxplot(data=dataframe,
                 x=x_axis_variable,
-                y=y_axis_variable)
-    plt.title('Box and whisker plot displaying data distributions '
-              'in two groups',
-              fontsize=11)
-    plt.xlabel(x_axis_variable, fontsize=10)
+                y=y_axis_variable,
+                hue=y_axis_variable,
+                palette=colors)
+    if mode == 'ACC':
+        to_title = 'mobility'
+        xlabel = 'Mean activity (Acc [mg])'
+        title_fontsize = 9.5
+    elif mode == 'HRV':
+        to_title = 'HRV data'
+        xlabel = x_axis_variable
+        title_fontsize = 10.5
+    else:
+        raise ValueError('Wrong value of mode argument!')
+    plt.title(f'Box and whisker plot for {to_title} from two groups; '
+              f'U={test_statistics:.0f}, {presented_p_value}',
+              fontsize=title_fontsize, loc='left')
+    plt.xlabel(xlabel, fontsize=10)
+    plt.ylabel('group', fontsize=10)
     plt.tight_layout()
-    plt.savefig(f'{saving_folder}/boxplot_HRV.pdf', dpi=300)
+    plt.savefig(f'{saving_folder}/boxplot_{mode}.pdf', dpi=300)
     plt.close()
 
 
@@ -501,3 +555,30 @@ if __name__ == "__main__":
         age_patients,
         age_control
     )
+
+    # Mobility boxplot
+    # We need a .csv file with two columns: 'key' and 'ACC_mean'. The first
+    # of them contains names of the consecutive persons (e.g. control_3) while
+    # the second one contains mean mobility values as floats.
+    folder = '../data/rest_periods/'
+    file = 'acc_means.csv'
+    ACC_values = pd.read_csv(f'{folder}{file}', delimiter=',').dropna()
+    ACC_categories = {}
+    for category in ['control', 'treatment']:
+        ACC_categories[category] = ACC_values.loc[
+            ACC_values['key'].str.contains(category)]['ACC_mean'].values
+
+    ACC_values['key'] = ACC_values['key'].str.replace(r'(_)\d+', '',
+                                                      regex=True)
+
+    statistical_tests_results = compare_means_and_variances_in_groups(
+        ACC_values,
+        folder,
+        ACC_method='ACC_mean'
+    )
+    boxplot(ACC_values,
+            folder,
+            statistical_tests_results,
+            mode='ACC',
+            x_axis_variable='ACC_mean',
+            y_axis_variable='key')

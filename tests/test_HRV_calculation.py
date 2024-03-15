@@ -1,5 +1,5 @@
 """
-Copyright 2023
+Copyright 2023-2024
 Institute of Theoretical and Applied Informatics,
 Polish Academy of Sciences (ITAI PAS) https://www.iitis.pl
 
@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ---
-Polar HRV Data Analysis Library (PDAL) v 1.0
+Polar HRV Data Analysis Library (PDAL) v 1.1
 ---
 
 A source code to the paper:
@@ -61,7 +61,9 @@ from HRV_calculation import (
     calculate_mean_HRV_based_on_windows,
     filter_windows_with_chunked_dataframe,
     prepare_windows_any_frequency_any_step,
-    RMSSD_HRV_calculation
+    RMSSD_HRV_calculation,
+    SDNN_HRV_calculation,
+    pNN50_HRV_calculation,
 )
 
 
@@ -123,6 +125,54 @@ class Test(unittest.TestCase):
         result_3 = RMSSD_HRV_calculation(rr_intervals_3)
         gt_3 = 128.578769631693
         self.assertAlmostEqual(result_3, gt_3)
+
+    def test_SDNN_HRV_calculation(self):
+        time = pd.to_datetime([
+            "2021-12-01 11:00:12",
+            "2021-12-01 11:00:13",
+            "2021-12-01 11:00:14",
+            "2021-12-01 11:00:15",
+            "2021-12-01 11:00:16"]
+        )
+        rr_intervals = pd.Series(
+            [600, 675, 525, 750, 800],
+            index=time)
+        result = SDNN_HRV_calculation(rr_intervals)
+        gt = 99.247166206
+        self.assertAlmostEqual(result, gt)
+
+    def test_pNN50_HRV_calculation(self):
+        # Theoretically, difference in time should be the same like
+        # RR intervals but it does not matter for this function, because
+        # only RR interval values are taken into account
+        time = pd.to_datetime(
+            ["2021-12-01 11:00:00",
+             "2021-12-01 11:00:12",
+             "2021-12-01 11:01:30",
+             "2021-12-01 11:02:00",
+             "2021-12-01 11:02:35",
+             "2021-12-01 11:03:01",
+             "2021-12-01 11:03:48",
+             "2021-12-01 11:04:30",
+             "2021-12-01 11:07:21",
+             "2021-12-01 11:10:33",
+             "2021-12-01 11:10:44",
+             "2021-12-01 11:13:27",
+             "2021-12-01 11:16:00",
+             "2021-12-01 11:16:08",
+             "2021-12-01 11:17:03",
+             "2021-12-01 11:18:00"]
+        )
+        rr_intervals = pd.Series(
+            [530, 2531, 480, 500, 560,
+             611, 620, 800, 670, 730,
+             2001, 510, 580, 550, 620, 640],
+            index=time
+        )
+        # NN50 count: 8
+        result = pNN50_HRV_calculation(rr_intervals)
+        gt = 0.6153846153846
+        self.assertAlmostEqual(result, gt)
 
     def test_prepare_windows_any_frequency_any_step(self):
         time_index = pd.to_datetime(

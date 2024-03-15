@@ -1,5 +1,5 @@
 """
-Copyright 2023
+Copyright 2023-2024
 Institute of Theoretical and Applied Informatics,
 Polish Academy of Sciences (ITAI PAS) https://www.iitis.pl
 
@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ---
-Polar HRV Data Analysis Library (PDAL) v 1.0
+Polar HRV Data Analysis Library (PDAL) v 1.1
 ---
 
 A source code to the paper:

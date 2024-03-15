@@ -1,5 +1,5 @@
 """
-Copyright 2023
+Copyright 2023-2024
 Institute of Theoretical and Applied Informatics,
 Polish Academy of Sciences (ITAI PAS) https://www.iitis.pl
 
@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ---
-Polar HRV Data Analysis Library (PDAL) v 1.0
+Polar HRV Data Analysis Library (PDAL) v 1.1
 ---
 
 A source code to the paper:
@@ -56,7 +56,9 @@ import numpy as np
 
 from HRV_calculation import (
     calculate_HRV_in_windows,
-    RMSSD_HRV_calculation
+    RMSSD_HRV_calculation,
+    SDNN_HRV_calculation,
+    pNN50_HRV_calculation,
 )
 from utils_loading import (
     create_dataframe_from_HRV_results_different_methods,
@@ -67,7 +69,7 @@ from utils_postprocessing import (
     save_parameters
 )
 from utils_basic_plots import (
-    boxplot_HRV,
+    boxplot,
     plot_1D_signal,
     plot_distribution_PANSS_subcategories,
     regression_PANSS
@@ -161,22 +163,31 @@ def pipeline_load_data_and_calculate_HRV(
             data,
             step_frequency=parameters['step_frequency'],
             window_size=parameters['window_size'],
-            method=parameters['method'])
+            method=parameters['method'],
+            save=parameters['save_filtered_RR_intervals'],
+            path_with_filename=(
+                f"{parameters['plot_saving_folder']}"
+                f"{cur_person_group}_{cur_person_number}_RR_intervals.pkl"
+            )
+        )
         return data, HRV_windows_values, median_timestamps
     elif parameters['sequence_range'] == 'full':
+        RR_intervals_series = pd.Series(
+            data[column_name].values,
+            index=data['Phone timestamp'].values,
+            dtype=np.int64
+        )
         if parameters['method'] == 'RMSSD':
-            RR_intervals_series = pd.Series(
-                data[column_name].values,
-                index=data['Phone timestamp'].values,
-                dtype=np.int64
-            )
-            return (
-                data,
-                RMSSD_HRV_calculation(RR_intervals_series),
-                None
-            )
+            HRV = RMSSD_HRV_calculation(RR_intervals_series)
+        elif parameters['method'] == 'SDNN':
+            HRV = SDNN_HRV_calculation(RR_intervals_series)
+        elif parameters['method'] == 'pNN50':
+            HRV = pNN50_HRV_calculation(RR_intervals_series)
         else:
             raise ValueError('Wrong method of HRV calculation!')
+        return (
+            data, HRV, None
+        )
     elif parameters['sequence_range'] == 'without_HRV_calculation':
         return data, None, None
     else:
@@ -230,10 +241,13 @@ if __name__ == "__main__":
     accelerometer_folder = (
         '/data/anonimized_accelerometer_data/'
     )
-    PANSS_localization = f'{main_folder}../'
+    PANSS_localization = '../data/'
+    # -HRV_method- 'RMSSD', 'SDNN', 'pNN50'
     HRV_method = 'RMSSD'
     exclude_quetiapine = False
-    sensitivity_analysis = True
+    sensitivity_analysis = False
+    save_RR_intervals = False
+    alternative_hypothesis = 'two-sided'  # 'two-sided' or 'less'
     # -sequence_range- 'windows' or 'full'
     if sensitivity_analysis:
         step_frequencies = [
@@ -250,8 +264,7 @@ if __name__ == "__main__":
         step_frequencies = ['1 min']
         window_sizes = ['15 min']
         interpolation_options = [False]
-        result_saving_folder = '../article_results/detailed_analysis/'
-    os.makedirs(result_saving_folder, exist_ok=True)
+        result_saving_folder = '../article_review/'
     # step frequency cannot be greater than window size
     for step_frequency, window_size, interpolation in product(
             step_frequencies,
@@ -269,6 +282,7 @@ if __name__ == "__main__":
             time_threshold_before_finish = '45 seconds'
             parameters = {
                 'sequence_range': 'windows',
+                'alternative_hypothesis': alternative_hypothesis,
                 'method': HRV_method,
                 'step_frequency': pd.Timedelta(step_frequency),
                 'window_size': pd.Timedelta(window_size),
@@ -283,7 +297,8 @@ if __name__ == "__main__":
                 'interpolation': interpolation,
                 'exclude_quetiapine': exclude_quetiapine,
                 'plot': True,
-                'PANSS_loading_folder': PANSS_localization
+                'PANSS_loading_folder': PANSS_localization,
+                'save_filtered_RR_intervals': save_RR_intervals
             }
             parameters['name'] = (
                 f'HRV_{parameters["method"]}_'
@@ -306,10 +321,11 @@ if __name__ == "__main__":
                     f'{parameters["result_saving_folder"]}'
                     f'{parameters["name"]}/'
                 )
+            os.makedirs(parameters["plot_saving_folder"], exist_ok=True)
             full_results = experiment_1_calculate_HRV(parameters)
             # Load PANSS results
             PANSS = pd.read_csv(
-                f'{parameters["PANSS_loading_folder"]}/PANSS.csv',
+                f'{parameters["PANSS_loading_folder"]}PANSS.csv',
                 delimiter=';'
             )
             PANSS.insert(0, "group", "treatment")
@@ -331,17 +347,20 @@ if __name__ == "__main__":
             regression_PANSS(treatment_results,
                              f'HRV_{parameters["method"]}',
                              parameters,
-                             quetiapine_patients=quetiapine_patients_results)
-    if not sensitivity_analysis:
+                             quetiapine_patients=quetiapine_patients_results,
+                             alternative=parameters["alternative_hypothesis"])
+    if not sensitivity_analysis and not exclude_quetiapine:
         statistical_tests_results = compare_means_and_variances_in_groups(
             processed_data,
-            HRV_method,
-            parameters["result_saving_folder"]
+            f"{parameters['result_saving_folder']}{parameters['name']}/",
+            HRV_method=HRV_method,
         )
-        boxplot_HRV(processed_data,
-                    parameters['plot_saving_folder'],
-                    x_axis_variable=f'HRV_{parameters["method"]}',
-                    y_axis_variable='group')
+        boxplot(processed_data,
+                parameters['plot_saving_folder'],
+                statistical_tests_results,
+                mode='HRV',
+                x_axis_variable=f'HRV_{parameters["method"]}',
+                y_axis_variable='group')
         plot_distribution_PANSS_subcategories(
             parameters["PANSS_loading_folder"],
             '../Plots/'

@@ -1,5 +1,5 @@
 """
-Copyright 2023
+Copyright 2023-2024
 Institute of Theoretical and Applied Informatics,
 Polish Academy of Sciences (ITAI PAS) https://www.iitis.pl
 
@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ---
-Polar HRV Data Analysis Library (PDAL) v 1.0
+Polar HRV Data Analysis Library (PDAL) v 1.1
 ---
 
 A source code to the paper:
@@ -50,6 +50,7 @@ Tarnowskie Góry, Poland.
 """
 
 from typing import Iterable, Tuple
+import pickle
 import pandas as pd
 import numpy as np
 import matplotlib.dates as mdates
@@ -63,7 +64,6 @@ def RMSSD_HRV_calculation(data):
     Arguments:
     ----------
       *data*: (Pandas series) data including RR-intervals' values
-      *column_name*: (string) contains name of column with RR-intervals
 
     Returns:
     --------
@@ -88,6 +88,61 @@ def RMSSD_HRV_calculation(data):
     return HRV
 
 
+def SDNN_HRV_calculation(data):
+    """
+    Calculate standard deviation of RR intervals without outliers.
+
+    Arguments:
+    ----------
+       *data*: (Pandas series) data including RR-intervals' values
+
+    Returns:
+    --------
+      (float) HRV value
+    """
+    # In the case of empty Series or Series with one elements
+    if len(data) in [0, 1]:
+        return 0
+    else:
+        # Remove time intervals having values larger than 2 seconds
+        outliers = data.loc[lambda x: x > 2000]
+        RR_intervals = data.drop(outliers.index)
+        HRV = RR_intervals.std(ddof=0)
+        return HRV
+
+
+def pNN50_HRV_calculation(data):
+    """
+    Calculate pNN50, i.e. number of pairs of adjacent RR intervals
+    for which the difference between them is larger than 50 ms and
+    divide this value by the total number of RR intervals.
+
+    Arguments:
+    ----------
+       *data*: (Pandas series) data including RR-intervals' values
+
+    Returns:
+    --------
+      (float) HRV value
+    """
+    # In the case of empty Series or Series with one elements
+    if len(data) in [0, 1]:
+        return 0.
+    else:
+        # Remove time intervals having values larger than 2 seconds
+        outliers = data.loc[lambda x: x > 2000]
+        RR_intervals = data.drop(outliers.index)
+        RR_intervals_differences = RR_intervals.diff()[1:]
+        NN50 = len(RR_intervals_differences.loc[lambda x: abs(x) > 50])
+        if NN50 == 0:
+            # There is a possibility that none of the differences
+            # is larger than 50 miliseconds
+            return 0.
+        else:
+            pNN50 = float(NN50 / len(RR_intervals_differences))
+            return pNN50
+
+
 def calculate_mean_HRV_based_on_windows(row, method):
     """
     Modify each row of Pandas dataframe by the calculation
@@ -106,7 +161,13 @@ def calculate_mean_HRV_based_on_windows(row, method):
     """
     elements = np.array(row[f'HRV_{method}'])
     timestamps = np.array(row['timestamps'])
-    indices_of_wrong_elements = np.where(elements < 1e-6)
+    # Zeros are not wrong elements for 'pNN50' method
+    if method == 'pNN50':
+        indices_of_wrong_elements = np.empty(
+            shape=(0, 1), dtype=int)
+    else:
+        indices_of_wrong_elements = np.where(
+            elements < 1e-6)
     elements = np.delete(elements, indices_of_wrong_elements)
     row[f'HRV_{method}'] = np.mean(elements)
     row['timestamps'] = list(np.delete(timestamps, indices_of_wrong_elements))
@@ -232,12 +293,14 @@ def prepare_windows_any_frequency_any_step(series: pd.Series,
 
 
 def find_and_filter_missing_data(HRV_results: list | np.ndarray,
-                                 timestamps: list | np.ndarray) \
+                                 timestamps: list | np.ndarray,
+                                 method: str) \
                                     -> Tuple[np.ndarray, np.ndarray]:
     """
     In some cases, due to the lack of data, HRV values from
     particular windows may be equal to 0 and corresponding timestamps
     are related to the Unix epoch. They should be removed.
+    0 is not an error when a tested method is 'pNN50'
 
     Arguments:
     ----------
@@ -245,13 +308,19 @@ def find_and_filter_missing_data(HRV_results: list | np.ndarray,
                       from consecutive timestamps
       *timestamps* - (list or Numpy array) contains timestamps
                      related to the HRV values from *HRV_results*
+      *method* - (str) defines which HRV calculation method was used
 
     Returns:
     --------
       Potentially modified *HRV_results* and *timestamps*, both are
       Numpy arrays.
     """
-    indices_HRV = np.argwhere(np.array(HRV_results) < 1e-8)
+    # For some methods like 'pNN50' all HRV values can be equal to 0
+    # In such cases, it does not result from a calculation bug
+    if method == 'pNN50':
+        indices_HRV = np.empty(shape=(0, 1), dtype=int)
+    else:
+        indices_HRV = np.argwhere(np.array(HRV_results) < 1e-8)
     indices_time = np.argwhere(
         np.array(timestamps) == np.datetime64('1970-01-01T00:00:00'))
     all_indices_to_remove = np.union1d(indices_HRV, indices_time)
@@ -263,7 +332,10 @@ def find_and_filter_missing_data(HRV_results: list | np.ndarray,
 def calculate_HRV_in_windows(data: pd.DataFrame,
                              step_frequency: str | pd.Timedelta,
                              window_size: str | pd.Timedelta,
-                             method: str) -> Tuple[np.ndarray, np.ndarray]:
+                             method: str,
+                             save: bool = False,
+                             path_with_filename: str = "") -> Tuple[
+                                 np.ndarray, np.ndarray]:
     """
     Calculate the values of HRV for a given person with a division
     of the sequence into multiple subsequences (windows), according
@@ -285,6 +357,17 @@ def calculate_HRV_in_windows(data: pd.DataFrame,
         *method*: (str) method of HRV calculation;
                   possible options:
                   - RMSSD - root mean square of successive differences
+                  - SDNN - standard deviation of RR intervals without
+                           anomalies
+                  - pNN50 - number of RR intervals differing by more than
+                            50ms divided by the total number of RR intervals
+        *save*: (optional Boolean) defines whether a list of Pandas series
+                with filtered R-R intervals should be stored
+        *path_with_filename*: (optional string) defines path and filename if
+                              filtered R-R intervals have to be saved; if not,
+                              leave empty. If *save* is True, but path is not
+                              given, R-R intervals will be saved in the current
+                              path.
 
     Returns:
     --------
@@ -304,6 +387,11 @@ def calculate_HRV_in_windows(data: pd.DataFrame,
     # Prepare filtering of the above windows
     divided_series = filter_windows_with_chunked_dataframe(
         divided_series)
+    if save:
+        if not path_with_filename:
+            path_with_filename = './RR_filtered_intervals_with_time.pkl'
+        with open(path_with_filename, 'wb') as f:
+            pickle.dump(divided_series, f)
     # Calculate HRV values according to the selected method
     HRV_divided_series = np.zeros(len(divided_series))
     median_timestamps = np.zeros(len(divided_series), dtype='datetime64[ns]')
@@ -311,13 +399,22 @@ def calculate_HRV_in_windows(data: pd.DataFrame,
         if len(divided_series[i]) > 1:
             if method == 'RMSSD':
                 HRV_divided_series[i] = RMSSD_HRV_calculation(
-                    divided_series[i])
+                    divided_series[i]
+                )
+            elif method == 'SDNN':
+                HRV_divided_series[i] = SDNN_HRV_calculation(
+                    divided_series[i]
+                )
+            elif method == 'pNN50':
+                HRV_divided_series[i] = pNN50_HRV_calculation(
+                    divided_series[i]
+                )
             else:
                 raise NotImplementedError
             median_timestamps[i] = mdates.num2date(
                 np.median(mdates.date2num(divided_series[i].index)))
     HRV_divided_series, median_timestamps = find_and_filter_missing_data(
-        HRV_divided_series, median_timestamps
+        HRV_divided_series, median_timestamps, method
     )
     return (HRV_divided_series, median_timestamps)
 
