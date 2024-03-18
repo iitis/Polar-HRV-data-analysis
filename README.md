@@ -16,6 +16,7 @@ Authors:
 - Piotr Ścisło (PDMH, ORCID ID: [0000-0003-1213-2935](https://orcid.org/0000-0003-1213-2935)),
 - Paweł Dębski (FMS UMS, ORCID ID: [0000-0001-5904-6407](https://orcid.org/0000-0001-5904-6407)),
 - Robert Pudlo (FMS UMS, ORCID ID: [0000-0002-5748-0063](https://orcid.org/0000-0002-5748-0063)),
+- Krisztián Buza (BBU, SHU, ORCID ID: [0000-0002-7111-6452](https://orcid.org/0000-0002-7111-6452)),
 - Piotr Gorczyca (FMS UMS, ORCID ID: [0000-0002-9419-7988](https://orcid.org/0000-0002-9419-7988)),
 - Magdalena Piegza (FMS UMS, ORCID ID: [0000-0002-8009-7118](https://orcid.org/0000-0002-8009-7118)).
 
@@ -24,7 +25,9 @@ Polish Academy of Sciences, Gliwice, Poland;
 *FMS UMS* - Faculty of Medical Sciences in Zabrze,
 Medical University of Silesia, Tarnowskie Góry, Poland;  
 *PDMH* - Psychiatric Department of the Multidisciplinary Hospital,
-Tarnowskie Góry, Poland.  
+Tarnowskie Góry, Poland;
+*BBU* - Budapest Business University, Hungary;
+*SHU* - Department of Mathematics-Informatics, Sapientia Hungarian University of Transylvania, Târgu Mureș, Romania.
 
 ## LICENSE:
 Copyright 2023-2024
