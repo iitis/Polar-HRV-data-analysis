@@ -60,7 +60,8 @@ from matplotlib.dates import DateFormatter, MinuteLocator
 
 from utils_others import (
     append_row_to_file,
-    compare_means_and_variances_in_groups
+    compare_means_and_variances_in_groups,
+    filter_accelerometer_outlier_data
 )
 
 
@@ -394,6 +395,7 @@ def boxplot(dataframe,
                 x=x_axis_variable,
                 y=y_axis_variable,
                 hue=y_axis_variable,
+                dodge=False,
                 palette=colors)
     if mode == 'ACC':
         to_title = 'mobility'
@@ -405,6 +407,7 @@ def boxplot(dataframe,
         title_fontsize = 10.5
     else:
         raise ValueError('Wrong value of mode argument!')
+    ax.get_legend().remove()
     plt.title(f'Box and whisker plot for {to_title} from two groups; '
               f'U={test_statistics:.0f}, {presented_p_value}',
               fontsize=title_fontsize, loc='left')
@@ -570,9 +573,10 @@ if __name__ == "__main__":
 
     ACC_values['key'] = ACC_values['key'].str.replace(r'(_)\d+', '',
                                                       regex=True)
+    filtered_ACC_values = filter_accelerometer_outlier_data(ACC_values)
 
     statistical_tests_results = compare_means_and_variances_in_groups(
-        ACC_values,
+        filtered_ACC_values,
         folder,
         ACC_method='ACC_mean'
     )

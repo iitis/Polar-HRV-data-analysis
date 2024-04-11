@@ -50,6 +50,7 @@ Tarnowskie Góry, Poland.
 """
 
 import numpy as np
+import pandas as pd
 from scipy.stats import (
     levene,
     mannwhitneyu
@@ -184,6 +185,44 @@ def compare_means_and_variances_in_groups(
         'levene_statistic': levene_statistic,
         'levene_p_value': levene_p_value
     }
+
+
+def filter_accelerometer_outlier_data(dataframe):
+    """
+    Filter out accelerometer values excedding the 1.5 interquantile range
+    within a given group, calculated separately for the control and the
+    treatment group.
+
+    Argument:
+    --------
+        *dataframe* - Pandas Dataframe having columns: 'key' and 'ACC_mean'
+
+    Returns:
+    --------
+        Pandas DataFrame with filtered outliers, separately for each group
+    """
+    dataframe = dataframe.copy()
+    groups = ['control', 'treatment']
+    whiskers_ranges = {}
+    filtered_dataframes = []
+    for group in groups:
+        individual_values = dataframe.loc[
+            dataframe['key'] == group]['ACC_mean'].values
+        quartile_1 = np.percentile(individual_values, 25)
+        quartile_3 = np.percentile(individual_values, 75)
+        whiskers_range = 1.5 * (quartile_3 - quartile_1)
+        inliers_range = [quartile_1 - whiskers_range,
+                         quartile_3 + whiskers_range]
+        whiskers_ranges[group] = inliers_range
+        filtered_dataframes.append(
+            dataframe.loc[
+                (dataframe['key'] == group) & (
+                    (dataframe['ACC_mean'] <= whiskers_ranges[group][1]) &
+                    (dataframe['ACC_mean'] >= whiskers_ranges[group][0]))
+                ]
+        )
+    filtered_dataframes = pd.concat(filtered_dataframes)
+    return filtered_dataframes
 
 
 if __name__ == "__main__":
